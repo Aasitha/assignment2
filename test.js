@@ -2,6 +2,7 @@ var express = require('express');
 const UIDGenerator = require('uid-generator');
 const fs = require("fs");
 const workerpool = require('workerpool');
+const request=require('request');
 const sharp = require("sharp");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
@@ -201,9 +202,8 @@ app.post('/changePassword', function (req, res) {
  * @api {post} /logout User logging out
  * @apiName User logout
  * @apiGroup Authentication
- *
- * @apiBody {String} username Mandatory username
- *
+
+ * @apiHeader {String} token Token that represents the authenticated user
  * @apiSuccess {String} message Logged out
  *
  * @apiError UserNotFound The specified username not exists in database
@@ -250,14 +250,25 @@ app.post('/resize', function (req, res) {
         activeUsers[token].resized += 1;
         var filePath="./"+username+"/resized/"+activeUsers[token].resized+".jpg";
         pool.exec("resize", [src, width, height, username, filePath]).then(() => {
-            data.status=200;
-            data.msg="successfully resized"
-            res.send(data);
+            res.send("successfully resized");
         }).catch((err) => {
             res.send(err);
         })
     }
 })
+app.post('/resizeOnline',function(req,res){
+    var token=req.headers.token;
+    var imageUrl="https://c8.alamy.com/zooms/9/228070d0c6474a858fe644de260af0b3/j9bpjb.jpg"
+    request(imageUrl).pipe(sharp().resize(200)).toFile('onlineResized.jpg',function(err){
+        if(err){
+            console.log("Error: "+err);
+            res.send(err);
+        }else{
+            res.send("image resized successfully!");
+        }
+    });
+})
+
 /**
  * @api {post} /crop Crop the image
  * @apiName Crop image
