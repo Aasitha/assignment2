@@ -163,6 +163,8 @@ app.post('/login', function (req, res) {
  * @apiGroup Authentication
  *
  * @apiBody {String} username Mandatory username
+ * @apiBody {String} password Mandatory password
+ * @apiBody {String} newPassword Mandatory new password
  *
  * @apiSuccess {String} message Password updated
  *
@@ -207,9 +209,9 @@ app.post('/changePassword', function (req, res) {
  * @apiError UserNotFound The specified username not exists in database
  *
  */
-app.post('/:token/logout', function (req, res) {
+app.post('/logout', function (req, res) {
     
-    var token=req.params.token;
+    var token=req.headers.token;
     if(Object.keys(activeUsers).indexOf(token)==-1){
         res.status(400).send("Bad request");
     }else{
@@ -217,6 +219,21 @@ app.post('/:token/logout', function (req, res) {
     res.send("logged out");
     }
 })
+/**
+ * @api {post} /resize Resize the image
+ * @apiName Resize image
+ * @apiGroup Functionalities
+ *
+ * @apiBody {String} width Width of resized image
+ * @apiBody {String} height Height of resized image
+ * @apiBody {String} src Path for the image
+ * @apiHeader {string} token token that represents the authenticated user
+ *
+ * @apiSuccess {String} message Image resized
+ *
+ * @apiError Error Error occured while processing the image
+ *
+ */
 app.post('/resize', function (req, res) {
     var token=req.headers.token;
 
@@ -241,6 +258,23 @@ app.post('/resize', function (req, res) {
         })
     }
 })
+/**
+ * @api {post} /crop Crop the image
+ * @apiName Crop image
+ * @apiGroup Functionalities
+ *
+ * @apiBody {String} width Width in pixels
+ * @apiBody {String} height Height in pixels
+ * @apiBody {String} left Left in pixels
+ * @apiBody {String} top top in pixels
+ * @apiBody {String} src Path for the image
+ * @apiHeader {string} token token that represents the authenticated user
+ *
+ * @apiSuccess {String} message Image cropped
+ *
+ * @apiError Error Error occured while processing the image
+ *
+ */
 app.post('/crop', function (req, res) {
     var token = req.headers.token;
     if (Object.keys(activeUsers).indexOf(token) == -1) {
@@ -262,6 +296,20 @@ app.post('/crop', function (req, res) {
         })
     }
 })
+/**
+ * @api {post} /format Change the image format
+ * @apiName Format image
+ * @apiGroup Functionalities
+ *
+ * @apiBody {String} format required format
+ * @apiBody {String} src Path for the image
+ * @apiHeader {string} token token that represents the authenticated user
+ *
+ * @apiSuccess {String} message Image formatted
+ *
+ * @apiError Error Error occured while processing the image
+ *
+ */
 app.post('/format', function (req, res) {
     var token=req.headers.token;
     if (Object.keys(activeUsers).indexOf(token) == -1) {
