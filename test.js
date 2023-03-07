@@ -1,6 +1,6 @@
 var express = require('express');
 const UIDGenerator = require('uid-generator');
-
+const fs = require("fs");
 const workerpool = require('workerpool');
 const sharp = require("sharp");
 const bodyParser = require("body-parser");
@@ -8,16 +8,42 @@ const mongoose = require("mongoose");
 var app = express();
 var activeUsers = {};
 app.use(bodyParser.json())
-const pool = workerpool.pool(__dirname+"/resize-worker.js",{
+const pool = workerpool.pool(__dirname + "/resize-worker.js", {
     maxWorkers: 5,
-    //workerType: 'worker.js'
 });
 const userSchema = new mongoose.Schema({
     username: String,
     password: String
 });
-
+async function createDirectory(path){
+await fs.access(path, (error) => {
+    if (error) {
+        fs.mkdir(path, (error) => {
+            if (error) {
+                console.log(error);
+            } else {
+                console.log("New Directory created successfully !!");
+            }
+        });
+    } else {
+        console.log("Given Directory already exists !!");
+    }
+});
+}
 app.use(bodyParser.urlencoded({ extended: false }))
+/**
+ * @api {post} /register Register user
+ * @apiName registerUser
+ * @apiGroup Authentication
+ *
+ * @apiBody {String} username Mandatory unique username
+ * @apiBody {String} password Mandatory password
+ * 
+ *
+ * @apiSuccess {String} Message User registered.
+ * @apiError UserAlreadyExists Occurs when provided username is not unique
+ *
+ */
 app.post('/register', function (req, res) {
     var username = req.body.username
     var password = req.body.password
@@ -50,6 +76,26 @@ app.post('/register', function (req, res) {
     })
 
 })
+var data={
+
+}
+/**
+ * @api {post} /login User login
+ * @apiName loginUser
+ * @apiGroup Authentication
+ *
+ * @apiBody {String} username Mandatory username
+ * @apiBody {String} password Mandatory password
+ *
+ * @apiSuccess {Number} status OK
+ * @apiSuccess {String} token Unique token generated
+ * @apiSuccess {String} message Logged in
+ *
+ *
+ * @apiError UserNotFound Invalid credentials
+ *
+ 
+ */
 app.post('/login', function (req, res) {
     var username = req.body.username;
     var password = req.body.password;
@@ -71,31 +117,60 @@ app.post('/login', function (req, res) {
         if (docs) {
             //res.send("Logged in");
             if (Object.keys(activeUsers).indexOf(username) != -1) {
-                res.send("already logged in");
+                res.status(200).send("already logged in");
             } else {
-
-
+                var path = "./" + username;
+                createDirectory(path)
+                path="./"+username+"/resized"
+                createDirectory(path);
+                path="./"+username+"/cropped"
+                createDirectory(path);
+                path="./"+username+"/formatted"
+                createDirectory(path);
                 const uidgen = new UIDGenerator();
                 uidgen.generate((err, uid) => {
                     if (err) throw err;
                     else {
-                        res.send("logged in with token: " + uid);
-                        activeUsers[username] = {
-                            token: uid
+                        data.status=200;
+                        data.token=uid;
+                        data.msg="Logged in!"
+                        res.send(data);
+
+                        activeUsers[uid] = {
+                            uname:username,
+                            token: uid,
+                            resized: 0,
+                            cropped: 0,
+                            formatted: 0
                         }
                         console.log(activeUsers);
 
                     }
                 });
+
             }
         } else {
-            res.send("username not exists");
+            res.status(400).send("invalid credentials");
         }
     }).catch((err) => {
         if (err) res.send(err);
     })
 
 })
+/**
+ * @api {post} /changePassword Updating user password
+ * @apiName Change user password
+ * @apiGroup Authentication
+ *
+ * @apiBody {String} username Mandatory username
+ *
+ * @apiSuccess {String} message Password updated
+ *
+ *
+ * @apiError UserNotFound The specified username not exists in database
+ *
+
+ */
 app.post('/changePassword', function (req, res) {
     var username = req.body.username;
     var password = req.body.password;
@@ -120,37 +195,93 @@ app.post('/changePassword', function (req, res) {
     })
 
 })
-app.post('/logout', function (req, res) {
-    var username = req.body.username;
-    delete activeUsers[username];
+/**
+ * @api {post} /logout User logging out
+ * @apiName User logout
+ * @apiGroup Authentication
+ *
+ * @apiBody {String} username Mandatory username
+ *
+ * @apiSuccess {String} message Logged out
+ *
+ * @apiError UserNotFound The specified username not exists in database
+ *
+ */
+app.post('/:token/logout', function (req, res) {
+    
+    var token=req.params.token;
+    if(Object.keys(activeUsers).indexOf(token)==-1){
+        res.status(400).send("Bad request");
+    }else{
+    delete activeUsers[token];
     res.send("logged out");
+    }
 })
 app.post('/resize', function (req, res) {
-    var username = req.body.username;
-    if (Object.keys(activeUsers).indexOf(username) == -1) {
-        res.send("not logged in");
+    var token=req.headers.token;
+
+    if (Object.keys(activeUsers).indexOf(token) == -1) {
+        data.status=400;
+        data.msg="not logged in";
+        res.send(data);
     } else {
-        var src = process.argv[2];
+        
+        var username=activeUsers[token].uname;
+        var src = req.body.src;
         var width = parseInt(req.body.width);
         var height = parseInt(req.body.height);
-        //resizeImage(width,height,src)
-        pool.exec("resize", [width, height,username]).then(() => {
-
-            res.send("successfully resized")
+        activeUsers[token].resized += 1;
+        var filePath="./"+username+"/resized/"+activeUsers[token].resized+".jpg";
+        pool.exec("resize", [src, width, height, username, filePath]).then(() => {
+            data.status=200;
+            data.msg="successfully resized"
+            res.send(data);
         }).catch((err) => {
             res.send(err);
         })
     }
 })
-app.post('')
+app.post('/crop', function (req, res) {
+    var token = req.headers.token;
+    if (Object.keys(activeUsers).indexOf(token) == -1) {
+
+        res.send("not logged in");
+    } else {
+        var username=activeUsers[token].uname;
+        var src = req.body.src;
+        var width = req.body.width;
+        var height = req.body.height;
+        var left = req.body.left;
+        var top = req.body.top;
+        activeUsers[token].cropped += 1;
+        var filePath="./"+username+"/cropped/"+activeUsers[token].cropped+".jpg";
+        pool.exec("crop", [src, width, height, left, top, username,filePath]).then(() => {
+            res.send("cropped successfully");
+        }).catch((err) => {
+            res.send(err);
+        })
+    }
+})
+app.post('/format', function (req, res) {
+    var token=req.headers.token;
+    if (Object.keys(activeUsers).indexOf(token) == -1) {
+        res.send("not logged in");
+    } else {
+        var username=activeUsers[token].uname;
+        var src = req.body.src;
+        var format = req.body.format;
+        activeUsers[token].formatted += 1;
+        var filePath="./"+username+"/formatted/"+activeUsers[token].formatted+".jpg";
+        pool.exec("format", [src, format, username,filePath]).then(() => {
+            res.send("formatted successfully");
+        }).catch((err) => {
+            res.send(err);
+        })
+    }
+})
 var server = app.listen(3000, function () {
     var host = "localhost"
     var port = server.address().port
 
     console.log("Example app listening at http://%s:%s", host, port)
-})
-/* newUser.save().then(()=>{
-    res.render("secrets");
-}).catch((err)=>{
-    console.log(err);
-}) */
+});
